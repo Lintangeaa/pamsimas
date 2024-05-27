@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class MidtransController extends Controller
 {
-    public function checkout(Request $request, String $id)
+    public function checkout(Request $request, string $id)
     {
         $tagihan = Tagihan::query()->findOrFail($id);
         $pelanggan = Auth::guard('pelanggan')->user();
@@ -51,13 +51,14 @@ class MidtransController extends Controller
 
             return redirect($paymentUrl);
         } catch (Exception $e) {
-            echo $e->getMessage();
+            Log::error('Midtrans Transaction Error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Unable to process the payment.');
         }
     }
 
-    function paymentNotification(Request $request)
+    public function paymentNotification(Request $request)
     {
-        Log::info($request, ['type' => 'midtrans:payment notification']);
+        Log::info($request->all(), ['type' => 'midtrans:payment notification']);
 
         $serverKey = config('midtrans.server_key');
         $hashed = hash("sha512", $request->order_id . $request->status_code . $request->gross_amount . $serverKey);
@@ -65,35 +66,37 @@ class MidtransController extends Controller
         if ($hashed == $request->signature_key) {
             $pembayaran = Pembayaran::query()->find($request->order_id);
 
-            $pembayaran->status = $request->transaction_status;
-            $pembayaran->payment_type = $request->payment_type;
-            $pembayaran->transaction_time = $request->transaction_time;
-            $pembayaran->save();
-            if ($request->transaction_status == 'capture') {
-                if ($request->fraud_status == 'accept') {
-                    // TODO set transaction status on your database to 'success'
-                    // and response with 200 OK
-                    Log::info('capture and accept', ['type' => 'midtrans:payment status', 'order_id id' => $request->order_id]);
+            if ($pembayaran) {
+                $pembayaran->status = $request->transaction_status;
+                $pembayaran->payment_type = $request->payment_type;
+                $pembayaran->transaction_time = $request->transaction_time;
+
+                if ($request->transaction_status == 'capture') {
+                    if ($request->fraud_status == 'accept') {
+                        $pembayaran->status = 'success';
+                    }
+                } else if ($request->transaction_status == 'settlement') {
+                    $pembayaran->status = 'success';
+                } else if (
+                    $request->transaction_status == 'cancel' ||
+                    $request->transaction_status == 'deny' ||
+                    $request->transaction_status == 'expire'
+                ) {
+                    $pembayaran->status = 'failure';
+                } else if ($request->transaction_status == 'pending') {
+                    $pembayaran->status = 'pending';
                 }
-            } else if ($request->transaction_status == 'settlement') {
-                // TODO set transaction status on your database to 'success'
-                // and response with 200 OK
-                Log::info('settlement', ['type' => 'midtrans:payment status', 'order_id id' => $request->order_id]);
-            } else if (
-                $request->transaction_status == 'cancel' ||
-                $request->transaction_status == 'deny' ||
-                $request->transaction_status == 'expire'
-            ) {
-                // TODO set transaction status on your database to 'failure'
-                // and response with 200 OK
-                Log::info('cancel, deny, or expire', ['type' => 'midtrans:payment status', 'order_id id' => $request->order_id]);
-            } else if ($request->transaction_status == 'pending') {
-                // TODO set transaction status on your database to 'pending' / waiting payment
-                // and response with 200 OK
-                Log::info('pending', ['type' => 'midtrans:payment status', 'order_id id' => $request->order_id]);
+
+                $pembayaran->save();
+
+                Log::info('Transaction status updated', ['order_id' => $request->order_id, 'status' => $pembayaran->status]);
+            } else {
+                Log::error('Pembayaran not found for order_id: ' . $request->order_id);
             }
+        } else {
+            Log::error('Invalid signature key for order_id: ' . $request->order_id);
         }
 
-        return response()->json(['ok!']);
+        return response()->json(['message' => 'ok']);
     }
 }

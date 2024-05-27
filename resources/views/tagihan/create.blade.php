@@ -20,10 +20,10 @@
                                         class="form-control
                                         @error('no_pelanggan') is invalid
                                         @enderror"
-                                            value="{{ old('no_pelanggan') }}" placeholder="Ketik untuk mencari...">
-                                        @error('no_pelanggan')
-                                            <div class="alert alert-danger">{{ $message }}</div>
-                                        @enderror
+                                        value="{{ old('no_pelanggan') }}" placeholder="Ketik untuk mencari...">
+                                    @error('no_pelanggan')
+                                        <div class="alert alert-danger">{{ $message }}</div>
+                                    @enderror
                                     <datalist id="datalistOptions">
                                         @foreach ($daftarPelanggan as $item)
                                             <option value="{{ $item->no_pelanggan }}">

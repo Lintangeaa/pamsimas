@@ -99,18 +99,35 @@ class tagihanController extends Controller
 
     public function cariTagihan(Request $request)
     {
-        $noPelanggan = $request->no_pelanggan;
-        if ($request->no_pelanggan != null) {
-            $pelanggan = Pelanggan::query()->where('no_pelanggan', $request->no_pelanggan)->first();
-            if ($pelanggan == null) {
-                $listTagihan = null;
-            } else {
-                $listTagihan = Tagihan::query()->where('id_pelanggan', $pelanggan->id)->doesntHave('pembayaran')->get();
-            }
-        } else {
-            $listTagihan = Tagihan::query()->doesntHave('pembayaran')->get();
+        $query = Tagihan::query()->doesntHave('pembayaran');
+
+        if ($request->filled('no_pelanggan')) {
+            $query->whereHas('pelanggan', function ($q) use ($request) {
+                $q->where('no_pelanggan', 'like', '%' . $request->no_pelanggan . '%');
+            });
         }
 
-        return view('tagihan.cari', compact('listTagihan', 'noPelanggan'));
+        if ($request->filled('periode')) {
+            $query->where('periode', 'like', '%' . $request->periode . '%');
+        }
+
+        if ($request->filled('jml_pemakaian')) {
+            $query->where('jml_pemakaian', 'like', '%' . $request->jml_pemakaian . '%');
+        }
+
+        if ($request->filled('total')) {
+            $query->where('total', 'like', '%' . $request->total . '%');
+        }
+
+        $listTagihan = $query->get();
+
+        return view('tagihan.cari', [
+            'listTagihan' => $listTagihan,
+            'noPelanggan' => $request->no_pelanggan,
+            'periode' => $request->periode,
+            'jmlPemakaian' => $request->jml_pemakaian,
+            'total' => $request->total
+        ]);
     }
+
 }
